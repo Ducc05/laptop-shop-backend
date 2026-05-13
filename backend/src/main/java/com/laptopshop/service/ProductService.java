@@ -15,10 +15,13 @@ import com.laptopshop.entity.Product;
 import com.laptopshop.entity.ProductImage;
 import com.laptopshop.entity.ProductVariant;
 import com.laptopshop.mapper.ProductMapper;
+import com.laptopshop.repository.CartItemRepository;
 import com.laptopshop.repository.BrandRepository;
 import com.laptopshop.repository.BranchRepository;
 import com.laptopshop.repository.CategoryRepository;
 import com.laptopshop.repository.InventoryRepository;
+import com.laptopshop.repository.InventoryLogRepository;
+import com.laptopshop.repository.OrderItemRepository;
 import com.laptopshop.repository.ProductImageRepository;
 import com.laptopshop.repository.ProductRepository;
 import com.laptopshop.repository.ProductVariantRepository;
@@ -46,6 +49,9 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
+    private final CartItemRepository cartItemRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final InventoryLogRepository inventoryLogRepository;
     private final BranchRepository branchRepository;
     private final InventoryRepository inventoryRepository;
     private final ProductMapper productMapper;
@@ -137,7 +143,25 @@ public class ProductService {
 
     @Transactional
     public void deleteProduct(Long id) {
-        productRepository.deleteById(id);
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        List<ProductVariant> variants = product.getVariants() == null ? new ArrayList<>() : new ArrayList<>(product.getVariants());
+        for (ProductVariant variant : variants) {
+            Long variantId = variant.getId();
+            if (variantId == null) {
+                continue;
+            }
+
+            inventoryLogRepository.deleteByVariantId(variantId);
+            inventoryRepository.deleteByVariantId(variantId);
+            cartItemRepository.deleteByVariantId(variantId);
+            orderItemRepository.deleteByVariantId(variantId);
+            productImageRepository.deleteByVariantId(variantId);
+            productVariantRepository.delete(variant);
+        }
+
+        productRepository.delete(product);
     }
 
     private Category resolveCategory(ProductDTO dto) {
