@@ -30,7 +30,6 @@ public class DataImportService {
     @Value("${app.import.path}")
     private String importPath;
 
-    @Transactional
     public void importData() throws IOException {
         File file = new File(importPath);
         if (!file.exists()) {
