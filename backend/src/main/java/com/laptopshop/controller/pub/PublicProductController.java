@@ -32,6 +32,11 @@ public class PublicProductController {
         return productService.getSuggestions(q);
     }
 
+    @GetMapping("/best-selling")
+    public List<ProductDTO> getBestSellingProducts(@RequestParam(defaultValue = "4") int limit) {
+        return productService.getBestSellingProducts(limit);
+    }
+
     @GetMapping("/{id}")
     public ProductDTO getProduct(@PathVariable Long id) {
         return productService.getProduct(id);

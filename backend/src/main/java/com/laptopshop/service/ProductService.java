@@ -11,6 +11,7 @@ import com.laptopshop.entity.Branch;
 import com.laptopshop.entity.Category;
 import com.laptopshop.entity.Inventory;
 import com.laptopshop.entity.InventoryId;
+import com.laptopshop.entity.OrderStatus;
 import com.laptopshop.entity.Product;
 import com.laptopshop.entity.ProductImage;
 import com.laptopshop.entity.ProductVariant;
@@ -106,10 +107,45 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
+    public List<ProductDTO> getBestSellingProducts(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 12));
+        Pageable pageable = PageRequest.of(0, safeLimit);
+        List<Product> products = orderItemRepository.findBestSellingProducts(
+                List.of(OrderStatus.CANCELLED, OrderStatus.FAILED),
+                pageable);
+
+        if (products.isEmpty()) {
+            ProductFilterRequest fallbackFilter = new ProductFilterRequest();
+            Pageable fallbackPageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "id"));
+            products = productRepository.findAll(ProductSpecification.filter(fallbackFilter, false), fallbackPageable)
+                    .getContent();
+        }
+
+        return products.stream().map(this::toDtoWithPrimaryImage).toList();
+    }
+
+    @Transactional(readOnly = true)
     public ProductDTO getProduct(Long id) {
         return productRepository.findById(id)
                 .map(productMapper::toDto)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+    }
+
+    private ProductDTO toDtoWithPrimaryImage(Product product) {
+        ProductDTO dto = productMapper.toDto(product);
+
+        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+            ProductVariant firstVariant = product.getVariants().get(0);
+            if (firstVariant.getImages() != null && !firstVariant.getImages().isEmpty()) {
+                dto.setImages(java.util.List.of(firstVariant.getImages().get(0).getImageUrl()));
+            } else {
+                dto.setImages(java.util.List.of());
+            }
+        } else {
+            dto.setImages(java.util.List.of());
+        }
+
+        return dto;
     }
 
     @Transactional(readOnly = true)
