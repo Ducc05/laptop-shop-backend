@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -68,8 +69,18 @@ public class DataImportService {
             List<Map<String, Object>> rawVariants = (List<Map<String, Object>>) rawProduct.get("variants");
             for (Map<String, Object> rawVariant : rawVariants) {
                 String sku = (String) rawVariant.get("sku");
-                if (variantRepository.findBySku(sku).isPresent()) {
-                    continue; // Skip if already exists
+                Optional<ProductVariant> existingVariantOpt = variantRepository.findBySku(sku);
+                Map<String, Object> newSpecs = (Map<String, Object>) rawVariant.get("specs");
+
+                if (existingVariantOpt.isPresent()) {
+                    ProductVariant existingVariant = existingVariantOpt.get();
+                    // Nếu dữ liệu specs khác nhau thì mới update
+                    if (newSpecs != null && !newSpecs.equals(existingVariant.getSpecsJson())) {
+                        existingVariant.setSpecsJson(newSpecs);
+                        variantRepository.save(existingVariant);
+                        System.out.println("Auto-updated specs for SKU: " + sku);
+                    }
+                    continue; // Bỏ qua bước tạo mới
                 }
 
                 ProductVariant variant = ProductVariant.builder()
