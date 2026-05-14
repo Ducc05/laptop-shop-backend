@@ -37,6 +37,11 @@ public class AdminProductController {
         return productService.getProducts(filterRequest, page, size, true);
     }
 
+    @GetMapping("/{id}")
+    public ProductDTO getProductById(@PathVariable Long id) {
+        return productService.getProduct(id);
+    }
+
     @PostMapping
     public ProductDTO createProduct(@RequestBody ProductDTO dto) {
         return productService.createProduct(dto);

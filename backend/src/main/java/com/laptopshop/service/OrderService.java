@@ -140,6 +140,7 @@ public class OrderService {
         return Math.min(discount, total);
     }
 
+    @Transactional(readOnly = true)
     public PageResponseDTO<OrderDTO> getAllOrders(com.laptopshop.dto.OrderFilterRequest filter, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         Specification<Order> spec = OrderSpecification.filter(
@@ -224,18 +225,21 @@ public class OrderService {
         return order != null && order.getBranch().getId().equals(branchId);
     }
 
+    @Transactional(readOnly = true)
     public OrderDTO getMyOrderDetail(Long orderId, Long userId) {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You do not have permission to view this order or order not found"));
         return mapToDTO(order);
     }
 
+    @Transactional(readOnly = true)
     public OrderDTO getOrderDetail(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return mapToDTO(order);
     }
 
+    @Transactional(readOnly = true)
     public OrderDTO getBranchOrderDetail(Long orderId, Long branchId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -260,14 +264,21 @@ public class OrderService {
                 .voucherCode(order.getVoucher() != null ? order.getVoucher().getCode() : null)
                 .createdAt(order.getCreatedAt())
                 .items(order.getItems().stream()
-                        .map(item -> OrderItemDTO.builder()
+                        .map(item -> {
+                            String imageUrl = null;
+                            if (item.getVariant().getImages() != null && !item.getVariant().getImages().isEmpty()) {
+                                imageUrl = item.getVariant().getImages().get(0).getImageUrl();
+                            }
+                            return OrderItemDTO.builder()
                                 .id(item.getId())
                                 .variantId(item.getVariant().getId())
                                 .productName(item.getVariant().getProduct().getName())
                                 .sku(item.getVariant().getSku())
+                                .imageUrl(imageUrl)
                                 .quantity(item.getQuantity())
                                 .price(item.getPrice())
-                                .build())
+                                .build();
+                        })
                         .toList())
                 .build();
     }
