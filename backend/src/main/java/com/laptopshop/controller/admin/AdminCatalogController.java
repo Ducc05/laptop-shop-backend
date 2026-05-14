@@ -30,6 +30,11 @@ public class AdminCatalogController {
         return categoryService.getCategories(page, size, true);
     }
 
+    @GetMapping("/categories/{id}")
+    public CategoryDTO getCategoryById(@PathVariable Long id) {
+        return categoryService.getCategoryById(id);
+    }
+
     @PostMapping("/categories")
     public CategoryDTO createCategory(@RequestBody CategoryDTO dto) {
         return categoryService.createCategory(dto);
@@ -51,6 +56,11 @@ public class AdminCatalogController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return brandService.getBrands(page, size, true);
+    }
+
+    @GetMapping("/brands/{id}")
+    public BrandDTO getBrandById(@PathVariable Long id) {
+        return brandService.getBrandById(id);
     }
 
     @PostMapping("/brands")

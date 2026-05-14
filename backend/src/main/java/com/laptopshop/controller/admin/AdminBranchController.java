@@ -23,6 +23,11 @@ public class AdminBranchController {
         return branchService.getAllBranches();
     }
 
+    @GetMapping("/{id}")
+    public BranchDTO getBranchById(@PathVariable Long id) {
+        return branchService.getBranchById(id);
+    }
+
     @PostMapping
     public BranchDTO createBranch(@RequestBody BranchDTO dto) {
         return branchService.createBranch(dto);
