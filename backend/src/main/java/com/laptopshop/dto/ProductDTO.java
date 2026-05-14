@@ -18,4 +18,5 @@ public class ProductDTO {
     private Long brandId;
     private String brandName;
     private List<ProductVariantDTO> variants;
+    private List<String> images;
 }

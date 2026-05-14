@@ -60,32 +60,49 @@ public class ProductService {
     public List<String> getSuggestions(String query) {
         String trimmedQuery = query.trim();
         List<String> suggestions = new java.util.ArrayList<>();
-        
+
         // Tìm tên sp phù hợp
         productRepository.findTop10ByNameContainingIgnoreCase(trimmedQuery)
                 .forEach(p -> suggestions.add(p.getName()));
-        
+
         // Tìm tên thương hiệu phù hợp
         brandRepository.findTop10ByNameContainingIgnoreCase(trimmedQuery)
                 .forEach(b -> suggestions.add(b.getName()));
-        
+
         // Tìm tên danh mục phù hợp
         categoryRepository.findTop10ByNameContainingIgnoreCase(trimmedQuery)
                 .forEach(c -> suggestions.add(c.getName()));
-        
+
         return suggestions.stream().distinct().limit(10).toList();
     }
 
     @Transactional(readOnly = true)
     public PageResponseDTO<ProductDTO> getProducts(ProductFilterRequest request, int page, int size, boolean isAdmin) {
-        Sort sort = Sort.by(Sort.Direction.fromString(request.getSortDir() != null ? request.getSortDir() : "DESC"), 
+        Sort sort = Sort.by(Sort.Direction.fromString(request.getSortDir() != null ? request.getSortDir() : "DESC"),
                 request.getSortBy() != null ? request.getSortBy() : "id");
         Pageable pageable = PageRequest.of(page, size, sort);
-        
+
         Specification<Product> spec = ProductSpecification.filter(request, isAdmin);
         Page<Product> productPage = productRepository.findAll(spec, pageable);
-        
-        return PageResponseDTO.of(productPage.map(productMapper::toDto));
+
+        Page<ProductDTO> dtoPage = productPage.map(product -> {
+            ProductDTO dto = productMapper.toDto(product);
+            
+            // Populate ONLY THE FIRST image at product level for performance (Avoid N+1)
+            if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+                ProductVariant firstVariant = product.getVariants().get(0);
+                if (firstVariant.getImages() != null && !firstVariant.getImages().isEmpty()) {
+                    dto.setImages(java.util.List.of(firstVariant.getImages().get(0).getImageUrl()));
+                } else {
+                    dto.setImages(java.util.List.of());
+                }
+            } else {
+                dto.setImages(java.util.List.of());
+            }
+            return dto;
+        });
+
+        return PageResponseDTO.of(dtoPage);
     }
 
     @Transactional(readOnly = true)
@@ -146,7 +163,8 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        List<ProductVariant> variants = product.getVariants() == null ? new ArrayList<>() : new ArrayList<>(product.getVariants());
+        List<ProductVariant> variants = product.getVariants() == null ? new ArrayList<>()
+                : new ArrayList<>(product.getVariants());
         for (ProductVariant variant : variants) {
             Long variantId = variant.getId();
             if (variantId == null) {

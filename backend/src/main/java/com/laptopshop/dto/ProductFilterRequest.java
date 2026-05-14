@@ -12,6 +12,9 @@ public class ProductFilterRequest {
     private String cpu;
     private String ram;
     private String storage;
+    private String gpu;
+    private String screen;
+    private String os;
     private String sortBy;
     private String sortDir;
 }
