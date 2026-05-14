@@ -20,6 +20,7 @@ public class CartService {
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductVariantRepository variantRepository;
+    private final ProductImageRepository productImageRepository;
     private final UserRepository userRepository;
 
     public CartDTO getCart(Long userId) {
@@ -108,15 +109,23 @@ public class CartService {
 
     private CartDTO convertToDTO(Cart cart) {
         List<CartItemDTO> itemDTOs = cart.getItems().stream()
-                .map(item -> CartItemDTO.builder()
-                        .id(item.getId())
-                        .variantId(item.getVariant().getId())
-                        .productName(item.getVariant().getProduct().getName())
-                        .variantSku(item.getVariant().getSku())
-                        .quantity(item.getQuantity())
-                        .price(item.getVariant().getPrice()) // Current price
-                        .snapshotPrice(item.getPrice()) // Snapshot price when added
-                        .build())
+                .map(item -> {
+                    String imageUrl = productImageRepository.findByVariantId(item.getVariant().getId()).stream()
+                            .findFirst()
+                            .map(ProductImage::getImageUrl)
+                            .orElse(null);
+
+                    return CartItemDTO.builder()
+                            .id(item.getId())
+                            .variantId(item.getVariant().getId())
+                            .productName(item.getVariant().getProduct().getName())
+                            .variantSku(item.getVariant().getSku())
+                            .imageUrl(imageUrl)
+                            .quantity(item.getQuantity())
+                            .price(item.getVariant().getPrice()) // Current price
+                            .snapshotPrice(item.getPrice()) // Snapshot price when added
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         double total = itemDTOs.stream()
