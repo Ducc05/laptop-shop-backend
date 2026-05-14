@@ -57,22 +57,22 @@ public class ProductSpecification {
 
                 // Technical Specs (JSON filtering)
                 if (request.getCpu() != null && !request.getCpu().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "CPU", request.getCpu()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("cpu", "CPU"), request.getCpu()));
                 }
                 if (request.getRam() != null && !request.getRam().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "RAM", request.getRam()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("ram", "RAM"), request.getRam()));
                 }
                 if (request.getStorage() != null && !request.getStorage().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "Ổ cứng", request.getStorage()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("storage", "Storage", "rom", "ROM"), request.getStorage()));
                 }
                 if (request.getGpu() != null && !request.getGpu().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "Card đồ họa", request.getGpu()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("gpu", "GPU", "vga", "VGA"), request.getGpu()));
                 }
                 if (request.getScreen() != null && !request.getScreen().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "Màn hình", request.getScreen()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("screen", "Screen"), request.getScreen()));
                 }
                 if (request.getOs() != null && !request.getOs().isEmpty()) {
-                    predicates.add(createJsonFilter(criteriaBuilder, variants, "Hệ điều hành", request.getOs()));
+                    predicates.add(createJsonFilter(criteriaBuilder, variants, List.of("os", "OS"), request.getOs()));
                 }
 
                 query.distinct(true);
@@ -99,5 +99,12 @@ public class ProductSpecification {
                 variants.get("specsJson"), cb.literal("$." + "\"" + key + "\""));
         Expression<String> unquote = cb.function("JSON_UNQUOTE", String.class, extract);
         return cb.like(cb.lower(unquote), "%" + value.toLowerCase() + "%");
+    }
+
+    private static Predicate createJsonFilter(CriteriaBuilder cb, Join<Product, ProductVariant> variants,
+            List<String> keys, String value) {
+        return cb.or(keys.stream()
+                .map(key -> createJsonFilter(cb, variants, key, value))
+                .toArray(Predicate[]::new));
     }
 }
