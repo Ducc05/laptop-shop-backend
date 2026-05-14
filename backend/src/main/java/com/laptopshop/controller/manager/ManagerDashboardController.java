@@ -9,8 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @RestController
@@ -23,14 +26,25 @@ public class ManagerDashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping("/stats")
-    public DashboardStatsDTO getBranchStats() {
+    public DashboardStatsDTO getBranchStats(@RequestParam(required = false) String month) {
         Long branchId = SecurityUtils.getCurrentBranchId();
-        return dashboardService.getStats(branchId);
+        return dashboardService.getStats(branchId, parseDashboardMonth(month));
     }
 
     @GetMapping("/low-stock")
     public List<LowStockDTO> getBranchLowStock() {
         Long branchId = SecurityUtils.getCurrentBranchId();
         return dashboardService.getLowStockAlerts(branchId);
+    }
+
+    private YearMonth parseDashboardMonth(String month) {
+        if (month == null || month.isBlank()) {
+            return YearMonth.now();
+        }
+        try {
+            return YearMonth.parse(month);
+        } catch (DateTimeParseException ignored) {
+            return YearMonth.now();
+        }
     }
 }
