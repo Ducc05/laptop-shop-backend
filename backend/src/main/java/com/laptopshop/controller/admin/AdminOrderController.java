@@ -30,6 +30,11 @@ public class AdminOrderController {
         return orderService.getAllOrders(filterRequest, page, size);
     }
 
+    @GetMapping("/{id}")
+    public OrderDTO getOrderDetail(@PathVariable Long id) {
+        return orderService.getOrderDetail(id);
+    }
+
     @PutMapping("/{id}/status")
     public void updateOrderStatus(@PathVariable Long id, @RequestParam OrderStatus status) {
         orderService.updateOrderStatus(id, status);

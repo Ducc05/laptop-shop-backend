@@ -230,6 +230,23 @@ public class OrderService {
         return mapToDTO(order);
     }
 
+    public OrderDTO getOrderDetail(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        return mapToDTO(order);
+    }
+
+    public OrderDTO getBranchOrderDetail(Long orderId, Long branchId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (branchId == null || !order.getBranch().getId().equals(branchId)) {
+            throw new AccessDeniedException("You do not have permission to view this order");
+        }
+
+        return mapToDTO(order);
+    }
+
     private OrderDTO mapToDTO(Order order) {
         return OrderDTO.builder()
                 .id(order.getId())
