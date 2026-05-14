@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
+
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 @RequiredArgsConstructor
@@ -41,7 +44,19 @@ public class AdminOrderController {
     }
 
     @GetMapping("/dashboard/stats")
-    public DashboardStatsDTO getGlobalStats() {
-        return dashboardService.getStats(null);
+    public DashboardStatsDTO getGlobalStats(@RequestParam(required = false) String month) {
+        return dashboardService.getStats(null, parseDashboardMonth(month));
+    }
+
+    private YearMonth parseDashboardMonth(String month) {
+        if (month == null || month.isBlank()) {
+            return YearMonth.now();
+        }
+
+        try {
+            return YearMonth.parse(month);
+        } catch (DateTimeParseException ignored) {
+            return YearMonth.now();
+        }
     }
 }

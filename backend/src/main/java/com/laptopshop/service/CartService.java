@@ -62,14 +62,17 @@ public class CartService {
             throw new RuntimeException("Unauthorized to update this cart item");
         }
 
+        Cart cart = cartItem.getCart();
+
         if (quantity <= 0) {
+            cart.getItems().remove(cartItem);
             cartItemRepository.delete(cartItem);
         } else {
             cartItem.setQuantity(quantity);
             cartItemRepository.save(cartItem);
         }
 
-        return convertToDTO(cartItem.getCart());
+        return convertToDTO(cart);
     }
 
     @Transactional
@@ -81,8 +84,10 @@ public class CartService {
             throw new RuntimeException("Unauthorized to remove this cart item");
         }
 
+        Cart cart = cartItem.getCart();
+        cart.getItems().remove(cartItem);
         cartItemRepository.delete(cartItem);
-        return convertToDTO(cartItem.getCart());
+        return convertToDTO(cart);
     }
 
     @Transactional
