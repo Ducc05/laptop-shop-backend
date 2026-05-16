@@ -75,6 +75,8 @@ public class PaymentService {
     public String createPaymentUrl(Long orderId, PaymentMethod method, HttpServletRequest request) throws Exception {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        order.setPaymentMethod(method);
+        order.setPaymentStatus(PaymentStatus.PENDING);
 
         // Lấy số tiền thật của đơn hàng
         long amount = order.getTotalPrice().longValue();
@@ -243,7 +245,7 @@ public class PaymentService {
                 .addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
                 .setMode(SessionCreateParams.Mode.PAYMENT)
                 .setSuccessUrl(backendUrl + "/api/v1/payments/stripe-success?orderId=" + order.getId() + "&sessionId={CHECKOUT_SESSION_ID}")
-                .setCancelUrl("http://localhost:3000/payment/result?status=CANCELLED&orderId=" + order.getId())
+                .setCancelUrl(backendUrl + "/api/v1/payments/stripe-cancel?orderId=" + order.getId())
                 .addLineItem(SessionCreateParams.LineItem.builder()
                         .setQuantity(1L)
                         .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
@@ -270,6 +272,8 @@ public class PaymentService {
         
         if ("00".equals(vnp_ResponseCode)) {
             handlePaymentSuccess(order, params.get("vnp_TransactionNo"));
+        } else if ("24".equals(vnp_ResponseCode)) {
+            handlePaymentCancelled(order, params.get("vnp_TransactionNo"));
         } else {
             handlePaymentFailure(order, params.get("vnp_TransactionNo"));
         }
@@ -288,9 +292,18 @@ public class PaymentService {
 
         if ("0".equals(resultCode)) {
             handlePaymentSuccess(order, transId);
+        } else if ("1006".equals(resultCode)) {
+            handlePaymentCancelled(order, transId);
         } else {
             handlePaymentFailure(order, transId);
         }
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    public void processPaymentCancel(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        handlePaymentCancelled(order, null);
         orderRepository.save(order);
     }
 
@@ -346,9 +359,22 @@ public class PaymentService {
     }
 
     private void handlePaymentFailure(Order order, String transactionId) {
+        if (order.getPaymentStatus() == PaymentStatus.SUCCESS) {
+            return;
+        }
+
         order.setPaymentStatus(PaymentStatus.FAILED);
         // Có thể giữ OrderStatus là PENDING để khách thử lại hoặc chuyển thành FAILED
         updatePayment(order, PaymentStatus.FAILED, transactionId);
+    }
+
+    private void handlePaymentCancelled(Order order, String transactionId) {
+        if (order.getPaymentStatus() == PaymentStatus.SUCCESS || order.getStatus() != OrderStatus.PENDING) {
+            return;
+        }
+
+        order.setPaymentStatus(PaymentStatus.CANCELLED);
+        updatePayment(order, PaymentStatus.CANCELLED, transactionId);
     }
 
     private void updatePayment(Order order, PaymentStatus status, String transactionId) {

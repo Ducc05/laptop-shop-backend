@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +44,7 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
+        PaymentMethod method = resolvePaymentMethod(request.getPaymentMethod());
 
         Order order = Order.builder()
                 .user(user)
@@ -50,6 +52,7 @@ public class OrderService {
                 .status(OrderStatus.PENDING)
                 .totalPrice(0.0)
                 .items(new ArrayList<>())
+                .paymentMethod(method)
                 .paymentStatus(PaymentStatus.PENDING)
                 .build();
 
@@ -108,11 +111,6 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
 
         // 3. Initialize first Payment (if not COD, but for now we set up the entity)
-        PaymentMethod method = request.getPaymentMethod() != null ? 
-                PaymentMethod.valueOf(request.getPaymentMethod()) : PaymentMethod.COD;
-        
-        savedOrder.setPaymentMethod(method);
-        
         Payment payment = Payment.builder()
                 .order(savedOrder)
                 .amount(total)
@@ -125,6 +123,18 @@ public class OrderService {
         cartService.clearCart(userId);
 
         return mapToDTO(savedOrder);
+    }
+
+    private PaymentMethod resolvePaymentMethod(String paymentMethod) {
+        if (paymentMethod == null || paymentMethod.isBlank()) {
+            return PaymentMethod.COD;
+        }
+
+        try {
+            return PaymentMethod.valueOf(paymentMethod.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new RuntimeException("Unsupported payment method: " + paymentMethod);
+        }
     }
 
     private double calculateDiscount(Voucher voucher, double total) {
@@ -252,12 +262,14 @@ public class OrderService {
     }
 
     private OrderDTO mapToDTO(Order order) {
+        PaymentMethod paymentMethod = resolveOrderPaymentMethod(order);
+
         return OrderDTO.builder()
                 .id(order.getId())
                 .userId(order.getUser().getId())
                 .branchId(order.getBranch().getId())
                 .status(order.getStatus().name())
-                .paymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null)
+                .paymentMethod(paymentMethod != null ? paymentMethod.name() : null)
                 .paymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null)
                 .totalPrice(order.getTotalPrice())
                 .discountAmount(order.getDiscountAmount())
@@ -281,5 +293,15 @@ public class OrderService {
                         })
                         .toList())
                 .build();
+    }
+
+    private PaymentMethod resolveOrderPaymentMethod(Order order) {
+        if (order.getPaymentMethod() != null) {
+            return order.getPaymentMethod();
+        }
+
+        return paymentRepository.findTopByOrderIdOrderByIdDesc(order.getId())
+                .map(Payment::getMethod)
+                .orElse(null);
     }
 }
