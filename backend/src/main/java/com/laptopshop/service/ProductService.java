@@ -38,12 +38,36 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProductService {
+    private static final List<String> CPU_KEYS = List.of("cpu", "CPU");
+    private static final List<String> RAM_KEYS = List.of("ram", "RAM");
+    private static final List<String> STORAGE_KEYS = List.of(
+            "storage",
+            "Storage",
+            "rom",
+            "ROM",
+            "\u1ed5 c\u1ee9ng",
+            "\u1ed4 c\u1ee9ng",
+            "\u1ed5 \u0111\u0129a c\u1ee9ng - SSD",
+            "\u1ed4 \u0111\u0129a c\u1ee9ng - SSD",
+            "\u1ed5 \u0111\u0129a c\u1ee9ng - HDD",
+            "\u1ed4 \u0111\u0129a c\u1ee9ng - HDD",
+            "Dung l\u01b0\u1ee3ng",
+            "Dung l\u01b0\u1ee3ng \u1ed5 c\u1ee9ng",
+            "Hard Drive",
+            "SSD",
+            "HDD");
+    private static final List<String> GPU_KEYS = List.of("gpu", "GPU", "vga", "VGA", "Card \u0111\u1ed3 h\u1ecda");
+    private static final List<String> SCREEN_KEYS = List.of("screen", "Screen", "M\u00e0n h\u00ecnh");
+    private static final List<String> OS_KEYS = List.of("os", "OS", "H\u1ec7 \u0111i\u1ec1u h\u00e0nh");
 
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
@@ -86,22 +110,7 @@ public class ProductService {
         Specification<Product> spec = ProductSpecification.filter(request, isAdmin);
         Page<Product> productPage = productRepository.findAll(spec, pageable);
 
-        Page<ProductDTO> dtoPage = productPage.map(product -> {
-            ProductDTO dto = productMapper.toDto(product);
-            
-            // Populate ONLY THE FIRST image at product level for performance (Avoid N+1)
-            if (product.getVariants() != null && !product.getVariants().isEmpty()) {
-                ProductVariant firstVariant = product.getVariants().get(0);
-                if (firstVariant.getImages() != null && !firstVariant.getImages().isEmpty()) {
-                    dto.setImages(java.util.List.of(firstVariant.getImages().get(0).getImageUrl()));
-                } else {
-                    dto.setImages(java.util.List.of());
-                }
-            } else {
-                dto.setImages(java.util.List.of());
-            }
-            return dto;
-        });
+        Page<ProductDTO> dtoPage = productPage.map(product -> toListDto(product, request));
 
         return PageResponseDTO.of(dtoPage);
     }
@@ -133,19 +142,124 @@ public class ProductService {
 
     private ProductDTO toDtoWithPrimaryImage(Product product) {
         ProductDTO dto = productMapper.toDto(product);
+        populatePrimaryImage(dto);
+        return dto;
+    }
 
-        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
-            ProductVariant firstVariant = product.getVariants().get(0);
-            if (firstVariant.getImages() != null && !firstVariant.getImages().isEmpty()) {
-                dto.setImages(java.util.List.of(firstVariant.getImages().get(0).getImageUrl()));
-            } else {
-                dto.setImages(java.util.List.of());
+    private ProductDTO toListDto(Product product, ProductFilterRequest request) {
+        ProductDTO dto = productMapper.toDto(product);
+
+        if (isVariantFilterActive(request) && dto.getVariants() != null) {
+            List<ProductVariantDTO> matchingVariants = dto.getVariants().stream()
+                    .filter(variant -> matchesVariantFilter(variant, request))
+                    .toList();
+
+            if (!matchingVariants.isEmpty()) {
+                dto.setVariants(matchingVariants);
             }
-        } else {
-            dto.setImages(java.util.List.of());
         }
 
+        populatePrimaryImage(dto);
         return dto;
+    }
+
+    private void populatePrimaryImage(ProductDTO dto) {
+        if (dto.getVariants() == null || dto.getVariants().isEmpty()) {
+            dto.setImages(java.util.List.of());
+            return;
+        }
+
+        ProductVariantDTO firstVariant = dto.getVariants().get(0);
+        if (firstVariant.getImages() == null || firstVariant.getImages().isEmpty()) {
+            dto.setImages(java.util.List.of());
+            return;
+        }
+
+        dto.setImages(java.util.List.of(firstVariant.getImages().get(0).getImageUrl()));
+    }
+
+    private boolean isVariantFilterActive(ProductFilterRequest request) {
+        return request.getMinPrice() != null || request.getMaxPrice() != null ||
+                hasText(request.getCpu()) ||
+                hasText(request.getRam()) ||
+                hasText(request.getStorage()) ||
+                hasText(request.getGpu()) ||
+                hasText(request.getScreen()) ||
+                hasText(request.getOs());
+    }
+
+    private boolean matchesVariantFilter(ProductVariantDTO variant, ProductFilterRequest request) {
+        if (request.getMinPrice() != null && (variant.getPrice() == null || variant.getPrice() < request.getMinPrice())) {
+            return false;
+        }
+        if (request.getMaxPrice() != null && (variant.getPrice() == null || variant.getPrice() > request.getMaxPrice())) {
+            return false;
+        }
+
+        return matchesAnySpec(variant, CPU_KEYS, request.getCpu()) &&
+                matchesAnySpec(variant, RAM_KEYS, request.getRam()) &&
+                matchesStorageSpec(variant, request.getStorage()) &&
+                matchesAnySpec(variant, GPU_KEYS, request.getGpu()) &&
+                matchesAnySpec(variant, SCREEN_KEYS, request.getScreen()) &&
+                matchesAnySpec(variant, OS_KEYS, request.getOs());
+    }
+
+    private boolean matchesAnySpec(ProductVariantDTO variant, List<String> keys, String expectedValue) {
+        if (!hasText(expectedValue)) {
+            return true;
+        }
+
+        String normalizedExpected = normalizeSpecText(expectedValue);
+        return keys.stream()
+                .map(key -> formatSpecValue(getSpecValue(variant, key)))
+                .map(this::normalizeSpecText)
+                .anyMatch(value -> value.contains(normalizedExpected));
+    }
+
+    private boolean matchesStorageSpec(ProductVariantDTO variant, String expectedValue) {
+        if (!hasText(expectedValue)) {
+            return true;
+        }
+
+        String normalizedExpected = normalizeSpecText(expectedValue);
+        return STORAGE_KEYS.stream()
+                .map(key -> formatSpecValue(getSpecValue(variant, key)))
+                .map(this::normalizeSpecText)
+                .anyMatch(value -> {
+                    int index = value.indexOf(normalizedExpected);
+                    return index >= 0 && index <= 15;
+                });
+    }
+
+    private Object getSpecValue(ProductVariantDTO variant, String key) {
+        Map<String, Object> specs = variant.getSpecsJson();
+        return specs == null ? null : specs.get(key);
+    }
+
+    private String formatSpecValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .map(this::formatSpecValue)
+                    .filter(this::hasText)
+                    .collect(Collectors.joining(", "));
+        }
+        if (value instanceof Map<?, ?>) {
+            return "";
+        }
+        return String.valueOf(value);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String normalizeSpecText(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase(Locale.ROOT).replaceAll("[\\s\\u00A0]+", "");
     }
 
     @Transactional(readOnly = true)
