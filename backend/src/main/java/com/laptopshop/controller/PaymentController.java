@@ -34,8 +34,14 @@ public class PaymentController {
     @GetMapping("/vnpay-callback")
     public ResponseEntity<Void> vnpayCallback(@RequestParam Map<String, String> params) {
         paymentService.processVnPayCallback(params);
+        String orderId = "";
+        String txnRef = params.get("vnp_TxnRef");
+        if (txnRef != null && !txnRef.isBlank()) {
+            orderId = "&orderId=" + txnRef.split("_")[0];
+        }
+
         return ResponseEntity.status(302)
-                .header("Location", "http://localhost:3000/payment/result?status=" + params.get("vnp_ResponseCode"))
+                .header("Location", "http://localhost:3000/payment/result?status=" + params.get("vnp_ResponseCode") + orderId)
                 .build();
     }
 
@@ -61,6 +67,14 @@ public class PaymentController {
         paymentService.processStripeSuccess(orderId, sessionId);
         return ResponseEntity.status(302)
                 .header("Location", "http://localhost:3000/payment/result?status=SUCCESS&orderId=" + orderId)
+                .build();
+    }
+
+    @GetMapping("/stripe-cancel")
+    public ResponseEntity<Void> stripeCancel(@RequestParam Long orderId) {
+        paymentService.processPaymentCancel(orderId);
+        return ResponseEntity.status(302)
+                .header("Location", "http://localhost:3000/payment/result?status=CANCELLED&orderId=" + orderId)
                 .build();
     }
 }
